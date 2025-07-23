@@ -21,6 +21,7 @@
 
 # don't store data; we'll use proper data repo
 /rawdata
+/outdata
 /renv
 
 # Output files from R CMD check
