@@ -1,0 +1,11 @@
+"Metric","Value"
+"total_sequence_records",6815
+"total_sampling_locations_all_data",815
+"unique_locations_with_emf_data",367
+"emf_host_species_count",99
+"unique_emf_taxa",807
+"unique_host_species",16
+"native_hosts_with_sequences",11
+"percent_hosts_with_data",11.11
+"unique_host_genera",7
+"percent_genera_with_data",21.21

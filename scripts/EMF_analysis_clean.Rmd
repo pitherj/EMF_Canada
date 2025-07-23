@@ -1,0 +1,627 @@
+---
+title: "CIEE Working Group: EMF in Canada"
+subtitle: "Addressing Eltonian, Hutchinsonian, and Wallacean Shortfalls"
+author: "Jason Pither, Clara Qin, Isaac Eckert"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: flatly
+    code_folding: hide
+    df_print: paged
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 12,
+  fig.height = 10,
+  cache = FALSE  # Disabled to avoid terra pointer issues
+)
+
+# Source all required scripts
+source(here::here("scripts", "01_setup.R"))
+source(here::here("scripts", "utils.R"))
+
+# Setup analysis environment
+setup_emf_analysis()
+```
+
+# Overview
+
+This analysis addresses three major knowledge gaps for ectomycorrhizal fungi (EMF) in Canada:
+
+- **Eltonian Shortfall**: Gap in knowledge about species interactions
+- **Hutchinsonian Shortfall**: Gap in knowledge about species' abiotic niches  
+- **Wallacean Shortfall**: Gap in knowledge about species distributions
+
+The analysis combines tree species distribution data, mycorrhizal databases, and EMF sequence data to quantify these knowledge gaps across Canadian ecosystems. We examine EMF diversity at multiple taxonomic levels including sequence-based taxa (Other_ID and UNITE_ID), genera, and species.
+
+---
+
+# Methods
+
+## Data Processing Pipeline
+
+The analysis follows a structured pipeline implemented across multiple R scripts:
+
+1. **Setup** (`01_setup.R`): Environment configuration and library loading
+2. **Data Download** (`02_download_data.R`): Acquisition of external datasets
+3. **Spatial Processing** (`03_process_spatial.R`): Geographic data preparation
+4. **Fungal Data Processing** (`04_process_fungal.R`): EMF and mycorrhizal data integration
+5. **Metrics Calculation** (`05_calculate_metrics.R`): Richness and coverage analysis
+6. **Visualization** (`06_create_maps.R`): Map creation and spatial visualization
+
+## Data Sources
+
+- **FungalRoot Database**: Mycorrhizal associations (Soudzilovskaia et al., 2020)
+- **Tree Range Maps**: Little's range maps from USGS
+- **EMF Sequence Data**: Provided by Stephanie Kivlin
+- **Locations in Canada where EMF have been sampled**: Provided by Stephanie Kivlin & from van Galen et al. (2025)
+- **Ecoregions**: National Ecological Framework for Canada
+- **Administrative Boundaries**: GADM database
+
+## Taxonomic Classification
+
+EMF diversity is analyzed at four taxonomic levels:
+
+- **Other_ID**: Sequence hypothesis codes from Other database
+- **UNITE_ID**: Sequence hypothesis codes from UNITE database
+- **Genus**: Extracted from EM_Species assignments
+- **Species**: Lowest taxonomic assignment possible from EM_Species
+
+---
+
+# Data Processing
+
+```{r run-analysis, include=FALSE}
+# Check if analysis has been run
+outdata_dir <- here::here("outdata")
+analysis_complete <- validate_analysis_files(outdata_dir)
+
+if (!analysis_complete) {
+  message("Running complete analysis pipeline...")
+  
+  # Run all processing scripts
+  source(here::here("scripts", "02_download_data.R"))
+  download_summary <- download_all_data(here::here("rawdata"))
+  
+  source(here::here("scripts", "03_process_spatial.R"))
+  spatial_summary <- process_all_spatial(here::here("rawdata"), outdata_dir)
+  
+  source(here::here("scripts", "04_process_fungal.R"))
+  fungal_summary <- process_all_fungal(here::here("rawdata"), outdata_dir)
+  
+  source(here::here("scripts", "05_calculate_metrics.R"))
+  metrics_summary <- calculate_all_metrics(outdata_dir)
+  
+  source(here::here("scripts", "06_create_maps.R"))
+  maps_summary <- create_all_maps(outdata_dir, here::here("figures"))
+  
+  message("✓ Complete analysis pipeline finished")
+} else {
+  message("✓ Analysis files found - loading existing results")
+}
+```
+
+```{r load-results}
+# Load processed results
+basic_stats <- readRDS(file.path(outdata_dir, "basic_emf_stats.rds"))
+
+# Load comprehensive EMF analysis
+comprehensive_path <- file.path(outdata_dir, "comprehensive_emf_analysis.rds")
+if (file.exists(comprehensive_path)) {
+  comprehensive_results <- readRDS(comprehensive_path)
+} else {
+  comprehensive_results <- NULL
+}
+
+# Load metrics if available
+metrics_path <- file.path(outdata_dir, "metrics_summary.rds")
+if (file.exists(metrics_path)) {
+  metrics_summary <- readRDS(metrics_path)
+} else {
+  metrics_summary <- NULL
+}
+
+# Load maps if available
+maps_path <- file.path(outdata_dir, "maps_summary.rds")
+if (file.exists(maps_path)) {
+  maps_summary <- readRDS(maps_path)
+} else {
+  maps_summary <- NULL
+}
+```
+
+---
+
+# Results
+
+## Summary Statistics
+
+```{r create-summary-tables}
+# Create formatted summary tables
+tables_summary <- create_summary_tables(outdata_dir, outdata_dir)
+summary_stats <- tables_summary$summary_statistics
+knowledge_gaps <- tables_summary$knowledge_gaps
+```
+
+### EMF Research Coverage in Canada
+
+```{r summary-table}
+format_kable_table(
+  summary_stats,
+  caption = "Summary statistics for EMF research coverage in Canada",
+  col_names = c("Metric", "Value")
+)
+```
+
+### Knowledge Gap Analysis
+
+```{r knowledge-gaps-table}
+format_kable_table(
+  knowledge_gaps,
+  caption = "Analysis of major knowledge shortfalls in EMF research",
+  col_names = c("Knowledge Shortfall", "Description", "Key Finding")
+)
+```
+
+## Comprehensive EMF Taxonomic Diversity
+
+```{r taxonomic-diversity}
+if (!is.null(comprehensive_results)) {
+  # Load the comprehensive summary table
+  comprehensive_summary_path <- file.path(outdata_dir, "comprehensive_emf_summary.csv")
+  if (file.exists(comprehensive_summary_path)) {
+    comprehensive_summary <- read.csv(comprehensive_summary_path)
+    
+    format_kable_table(
+      comprehensive_summary,
+      caption = "EMF taxonomic diversity and sampling intensity across different taxonomic levels",
+      col_names = c("Taxonomic Level", "Unique Taxa", "Mean Locations/Taxon", 
+                    "Max Locations/Taxon", "Host Species", "Mean Taxa/Host")
+    )
+  }
+}
+```
+
+## Wallacean Shortfall: Sampling Intensity Analysis
+
+```{r sampling-intensity}
+if (!is.null(comprehensive_results)) {
+  # Create sampling intensity summary
+  sampling_data <- data.frame(
+    Taxonomic_Level = c("Other_ID", "UNITE_ID", "Genus", "Species"),
+    Unique_Taxa = c(
+      comprehensive_results$unique_counts$unique_other_id,
+      comprehensive_results$unique_counts$unique_unite_id,
+      comprehensive_results$unique_counts$unique_em_genera,
+      comprehensive_results$unique_counts$unique_em_species
+    ),
+    Mean_Locations = c(
+      ifelse(is.null(comprehensive_results$sampling_intensity$other_id), NA, 
+             comprehensive_results$sampling_intensity$other_id$mean_locations),
+      ifelse(is.null(comprehensive_results$sampling_intensity$unite_id), NA, 
+             comprehensive_results$sampling_intensity$unite_id$mean_locations),
+      ifelse(is.null(comprehensive_results$sampling_intensity$genus), NA, 
+             comprehensive_results$sampling_intensity$genus$mean_locations),
+      ifelse(is.null(comprehensive_results$sampling_intensity$species), NA, 
+             comprehensive_results$sampling_intensity$species$mean_locations)
+    ),
+    Max_Locations = c(
+      ifelse(is.null(comprehensive_results$sampling_intensity$other_id), NA, 
+             comprehensive_results$sampling_intensity$other_id$max_locations),
+      ifelse(is.null(comprehensive_results$sampling_intensity$unite_id), NA, 
+             comprehensive_results$sampling_intensity$unite_id$max_locations),
+      ifelse(is.null(comprehensive_results$sampling_intensity$genus), NA, 
+             comprehensive_results$sampling_intensity$genus$max_locations),
+      ifelse(is.null(comprehensive_results$sampling_intensity$species), NA, 
+             comprehensive_results$sampling_intensity$species$max_locations)
+    ),
+    Min_Locations = c(
+      ifelse(is.null(comprehensive_results$sampling_intensity$other_id), NA, 
+             comprehensive_results$sampling_intensity$other_id$min_locations),
+      ifelse(is.null(comprehensive_results$sampling_intensity$unite_id), NA, 
+             comprehensive_results$sampling_intensity$unite_id$min_locations),
+      ifelse(is.null(comprehensive_results$sampling_intensity$genus), NA, 
+             comprehensive_results$sampling_intensity$genus$min_locations),
+      ifelse(is.null(comprehensive_results$sampling_intensity$species), NA, 
+             comprehensive_results$sampling_intensity$species$min_locations)
+    ),
+    stringsAsFactors = FALSE
+  )
+  
+  format_kable_table(
+    sampling_data,
+    caption = "Sampling intensity analysis showing distribution gaps (Wallacean Shortfall)",
+    col_names = c("Taxonomic Level", "Unique Taxa", "Mean Locations", "Max Locations", "Min Locations")
+  )
+}
+```
+
+## Eltonian Shortfall: Host-Taxon Associations
+
+```{r host-associations}
+if (!is.null(comprehensive_results) && !is.null(comprehensive_results$host_associations)) {
+  # Create host association summary
+  association_data <- data.frame(
+    Taxonomic_Level = c("Other_ID", "UNITE_ID", "Genus", "Species"),
+    Host_Species_Count = c(
+      comprehensive_results$host_associations$other_id$summary$total_host_species,
+      comprehensive_results$host_associations$unite_id$summary$total_host_species,
+      comprehensive_results$host_associations$genus$summary$total_host_species,
+      comprehensive_results$host_associations$species$summary$total_host_species
+    ),
+    EMF_Taxa_Count = c(
+      comprehensive_results$host_associations$other_id$summary$total_emf_taxa,
+      comprehensive_results$host_associations$unite_id$summary$total_emf_taxa,
+      comprehensive_results$host_associations$genus$summary$total_emf_taxa,
+      comprehensive_results$host_associations$species$summary$total_emf_taxa
+    ),
+    Mean_Taxa_per_Host = c(
+      comprehensive_results$host_associations$other_id$summary$mean_taxa_per_host,
+      comprehensive_results$host_associations$unite_id$summary$mean_taxa_per_host,
+      comprehensive_results$host_associations$genus$summary$mean_taxa_per_host,
+      comprehensive_results$host_associations$species$summary$mean_taxa_per_host
+    ),
+    Max_Taxa_per_Host = c(
+      comprehensive_results$host_associations$other_id$summary$max_taxa_per_host,
+      comprehensive_results$host_associations$unite_id$summary$max_taxa_per_host,
+      comprehensive_results$host_associations$genus$summary$max_taxa_per_host,
+      comprehensive_results$host_associations$species$summary$max_taxa_per_host
+    ),
+    Mean_Hosts_per_Taxon = c(
+      comprehensive_results$host_associations$other_id$summary$mean_hosts_per_taxon,
+      comprehensive_results$host_associations$unite_id$summary$mean_hosts_per_taxon,
+      comprehensive_results$host_associations$genus$summary$mean_hosts_per_taxon,
+      comprehensive_results$host_associations$species$summary$mean_hosts_per_taxon
+    ),
+    stringsAsFactors = FALSE
+  )
+  
+  format_kable_table(
+    association_data,
+    caption = "Host-taxon association analysis showing interaction gaps (Eltonian Shortfall)",
+    col_names = c("Taxonomic Level", "Host Species", "EMF Taxa", "Mean Taxa/Host", 
+                  "Max Taxa/Host", "Mean Hosts/Taxon")
+  )
+}
+```
+
+## Spatial Coverage Analysis
+
+```{r spatial-coverage}
+if (!is.null(metrics_summary) && file.exists(file.path(outdata_dir, "proportion_stats.rds"))) {
+  proportion_stats <- readRDS(file.path(outdata_dir, "proportion_stats.rds"))
+  
+  prop_table <- data.frame(
+    Statistic = c("Grid cells with species data", "Cells with zero EMF coverage", 
+                  "Cells with EMF data", "Mean EMF coverage proportion", 
+                  "Maximum EMF coverage", "Range of coverage"),
+    Value = c(proportion_stats$cells_with_data,
+              proportion_stats$cells_zero_proportion,
+              proportion_stats$cells_nonzero_proportion,
+              proportion_stats$mean_proportion,
+              proportion_stats$max_proportion,
+              paste(proportion_stats$min_proportion, "-", proportion_stats$max_proportion)),
+    stringsAsFactors = FALSE
+  )
+  
+  format_kable_table(
+    prop_table,
+    caption = "Spatial analysis of EMF coverage across 1° × 1° grid cells",
+    col_names = c("Spatial Metric", "Value")
+  )
+}
+```
+
+---
+
+# Spatial Analysis and Visualization
+
+## Sampling Distribution
+
+```{r sampling-map, fig.cap="Distribution of EMF sampling locations across Canadian ecoregions. Points are colored by data source and aggregated within 1 km radius."}
+if (!is.null(maps_summary) && "sampling_map" %in% names(maps_summary)) {
+  print(maps_summary$sampling_map)
+} else {
+  # Load and display saved map
+  sampling_map_path <- file.path(here::here("figures"), "canada_sampling_locations_map.png")
+  if (file.exists(sampling_map_path)) {
+    knitr::include_graphics(sampling_map_path)
+  } else {
+    cat("Sampling map not available. Run mapping scripts to generate.")
+  }
+}
+```
+
+## EMF Host and sampling coverage
+
+```{r emf-richness-map, fig.cap="Number of tree species within each 1° × 1° grid cell that have associated EMF sequence data somewhere in Canada."}
+if (!is.null(maps_summary) && "emf_richness_map" %in% names(maps_summary)) {
+  print(maps_summary$emf_richness_map)
+} else {
+  # Load and display saved map
+  richness_map_path <- file.path(here::here("figures"), "canada_emf_richness_map.png")
+  if (file.exists(richness_map_path)) {
+    knitr::include_graphics(richness_map_path)
+  } else {
+    cat("EMF richness map not available. Run mapping scripts to generate.")
+  }
+}
+```
+
+***
+
+```{r emf-proportion-map, fig.cap="Proportion of tree species per 1° × 1° grid cell that have associated EMF sequence data somewhere in Canada"}
+if (!is.null(maps_summary) && "emf_proportion_map" %in% names(maps_summary)) {
+  print(maps_summary$emf_proportion_map)
+} else {
+  # Load and display saved map
+  proportion_map_path <- file.path(here::here("figures"), "canada_emf_proportion_map.png")
+  if (file.exists(proportion_map_path)) {
+    knitr::include_graphics(proportion_map_path)
+  } else {
+    cat("EMF proportion map not available. Run mapping scripts to generate.")
+  }
+}
+```
+
+***
+
+```{r bivariate-map, fig.cap="Bivariate map showing both the number (richness) of EMF host tree species and the proportion of host species in the grid cell with EMF records somewhere in Canada."}
+if (!is.null(maps_summary) && "bivariate_map" %in% names(maps_summary)) {
+  print(maps_summary$bivariate_map)
+} else {
+  # Load and display saved map
+  bivariate_map_path <- file.path(here::here("figures"), "canada_emf_bivariate_map.png")
+  if (file.exists(bivariate_map_path)) {
+    knitr::include_graphics(bivariate_map_path)
+  } else {
+    cat("Bivariate map not available. Run mapping scripts to generate.")
+  }
+}
+```
+
+---
+
+# Detailed Taxonomic Analysis
+
+## Most Well-Sampled Taxa
+
+```{r top-sampled-species}
+# Display top 10 most well-sampled species
+species_file_path <- file.path(outdata_dir, "locations_per_species.csv")
+if (file.exists(species_file_path)) {
+  species_data <- read.csv(species_file_path)
+  top_species <- head(species_data, 10)
+  
+  format_kable_table(
+    top_species,
+    caption = "Top 10 most well-sampled EMF species",
+    col_names = c("Species", "Unique Locations", "Total Records")
+  )
+}
+```
+
+```{r top-sampled-genera}
+# Display top 10 most well-sampled genera
+genus_file_path <- file.path(outdata_dir, "locations_per_genus.csv")
+if (file.exists(genus_file_path)) {
+  genus_data <- read.csv(genus_file_path)
+  top_genera <- head(genus_data, 10)
+  
+  format_kable_table(
+    top_genera,
+    caption = "Top 10 most well-sampled EMF genera",
+    col_names = c("Genus", "Unique Locations", "Total Records")
+  )
+}
+```
+
+```{r top-sampled-unite}
+# Display top 10 most well-sampled UNITE_ID taxa
+unite_file_path <- file.path(outdata_dir, "locations_per_unite_id.csv")
+if (file.exists(unite_file_path)) {
+  unite_data <- read.csv(unite_file_path)
+  top_unite <- head(unite_data, 10)
+  
+  format_kable_table(
+    top_unite,
+    caption = "Top 10 most well-sampled UNITE_ID taxa",
+    col_names = c("UNITE_ID", "Unique Locations", "Total Records")
+  )
+}
+```
+
+```{r top-sampled-other}
+# Display top 10 most well-sampled Other_ID taxa
+other_file_path <- file.path(outdata_dir, "locations_per_other_id.csv")
+if (file.exists(other_file_path)) {
+  other_data <- read.csv(other_file_path)
+  top_other <- head(other_data, 10)
+  
+  format_kable_table(
+    top_other,
+    caption = "Top 10 most well-sampled Other_ID taxa",
+    col_names = c("Other_ID", "Unique Locations", "Total Records")
+  )
+}
+```
+
+## Host Associations
+
+```{r host-association-examples}
+# Show examples of host-taxon associations
+species_hosts_path <- file.path(outdata_dir, "emf_taxa_per_host_species.csv")
+if (file.exists(species_hosts_path)) {
+  hosts_data <- read.csv(species_hosts_path)
+  top_hosts <- head(hosts_data, 10)
+  
+  format_kable_table(
+    top_hosts,
+    caption = "Top 10 host tree species by number of associated EMF species",
+    col_names = c("Host Species", "Unique EMF Species", "Total Records")
+  )
+}
+
+species_taxon_path <- file.path(outdata_dir, "hosts_per_emf_taxon_species.csv")
+if (file.exists(species_taxon_path)) {
+  taxon_data <- read.csv(species_taxon_path)
+  top_taxa <- head(taxon_data, 10)
+  
+  format_kable_table(
+    top_taxa,
+    caption = "Top 10 EMF species by number of associated host species",
+    col_names = c("EMF Species", "Unique Hosts", "Total Records")
+  )
+}
+```
+
+---
+
+# Knowledge Gaps
+
+```{r extract-key-numbers}
+# Extract key numbers for inline use
+if (!is.null(comprehensive_results)) {
+  other_id_count <- comprehensive_results$unique_counts$unique_other_id
+  unite_id_count <- comprehensive_results$unique_counts$unique_unite_id
+  genera_count <- comprehensive_results$unique_counts$unique_em_genera
+  species_count <- comprehensive_results$unique_counts$unique_em_species
+} else {
+  other_id_count <- unite_id_count <- genera_count <- species_count <- "N/A"
+}
+
+# Extract sampling location numbers
+total_locations <- ifelse("total_sampling_locations_all_data" %in% names(basic_stats), 
+                         basic_stats$total_sampling_locations_all_data, "N/A")
+emf_locations <- ifelse("unique_locations_with_emf_data" %in% names(basic_stats), 
+                       basic_stats$unique_locations_with_emf_data, "N/A")
+
+# Extract host coverage
+host_percent <- ifelse("percent_hosts_with_data" %in% names(basic_stats), 
+                      basic_stats$percent_hosts_with_data, "N/A")
+
+# Extract ecoregion coverage
+if (!is.null(metrics_summary)) {
+  ecoregions_unsampled_percent <- ifelse("percent_habitat_ecoregions_unsampled" %in% names(metrics_summary$sampling_coverage$stats),
+                                        metrics_summary$sampling_coverage$stats$percent_habitat_ecoregions_unsampled, "N/A")
+  ecoregions_sampled <- ifelse("habitat_ecoregions_sampled" %in% names(metrics_summary$sampling_coverage$stats),
+                              metrics_summary$sampling_coverage$stats$habitat_ecoregions_sampled, "N/A")
+  ecoregions_total <- ifelse("habitat_ecoregions_total" %in% names(metrics_summary$sampling_coverage$stats),
+                            metrics_summary$sampling_coverage$stats$habitat_ecoregions_total, "N/A")
+} else {
+  ecoregions_unsampled_percent <- ecoregions_sampled <- ecoregions_total <- "N/A"
+}
+```
+
+## Analysis Summary
+
+This comprehensive analysis reveals key knowledge shortfalls in EMF research across Canada:
+
+**Eltonian Shortfall (Species Interactions):**
+
+* `r host_percent`% of Canadian EMF host tree species have associated fungal sequence data  
+* `r other_id_count` unique Other_ID sequence-based taxa identified  
+* `r unite_id_count` unique UNITE_ID sequence-based taxa identified   
+* `r genera_count` unique EMF genera documented  
+* `r species_count` unique EMF species documented  
+* Host-taxon association matrices created for all taxonomic levels  
+
+**Hutchinsonian Shortfall (Environmental Niches):**
+
+- `r ecoregions_unsampled_percent`% of habitat ecoregions remain unsampled
+- `r ecoregions_sampled` of `r ecoregions_total` potential habitat ecoregions have been sampled
+
+**Wallacean Shortfall (Species Distributions):**
+
+- `r total_locations` total unique sampling locations across Canada
+- `r emf_locations` locations with detailed EMF sequence data
+- Sampling intensity varies dramatically among taxa at all taxonomic levels
+- Large geographic gaps exist in sampling coverage
+
+
+---
+
+# Data Availability
+
+All analysis outputs are available in the project's `outdata/` directory:
+
+```{r file-list}
+# List key output files
+key_files <- c(
+  "comprehensive_emf_summary.csv",
+  "locations_per_other_id.csv",
+  "locations_per_unite_id.csv", 
+  "locations_per_genus.csv",
+  "locations_per_species.csv",
+  "host_taxon_matrix_species.csv",
+  "emf_taxa_per_host_species.csv",
+  "hosts_per_emf_taxon_species.csv"
+)
+
+file_descriptions <- c(
+  "Summary statistics across all taxonomic levels",
+  "Sampling locations per Other_ID sequence-based taxon",
+  "Sampling locations per UNITE_ID sequence-based taxon",
+  "Sampling locations per EMF genus",
+  "Sampling locations per EMF species",
+  "Host-species association matrix",
+  "EMF species counts per host species",
+  "Host species counts per EMF species"
+)
+
+file_table <- data.frame(
+  File = key_files,
+  Description = file_descriptions,
+  Available = sapply(key_files, function(f) file.exists(file.path(outdata_dir, f))),
+  stringsAsFactors = FALSE
+)
+
+format_kable_table(
+  file_table,
+  caption = "Key analysis output files and their availability",
+  col_names = c("File Name", "Description", "Available")
+)
+```
+
+---
+
+# Session Information
+
+```{r session-info}
+# Save and display session information
+session_df <- save_session_info(outdata_dir)
+format_kable_table(
+  session_df,
+  caption = "R session information for reproducibility",
+  col_names = c("Component", "Details")
+)
+```
+
+```{r file-inventory}
+# Create file inventory for data management
+inventory <- create_file_inventory(outdata_dir)
+```
+
+---
+
+# References
+
+- Soudzilovskaia, N.A., et al. (2020). FungalRoot: global online database of plant mycorrhizal associations. *New Phytologist*, 227, 955–966.
+- Van Galen, L.G., Corrales, A., Truong, C., Van Den Hoogen, J., Kumar, S., Manley, B.F., et al. (2025). The biogeography and conservation of Earth's 'dark' ectomycorrhizal fungi. *Current Biology*, 35, R563–R574.
+- Little's range maps via the [USTreeAtlas repository](https://github.com/wpetry/USTreeAtlas)
+- National Ecological Framework for Canada
+- GADM database (gadm.org)
+
+---
+
+**Analysis completed on `r Sys.Date()`**  
+*For questions about this analysis, contact the corresponding authors.*
